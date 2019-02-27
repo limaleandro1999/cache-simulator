@@ -16,6 +16,8 @@ const cache2Way8192 = {cache: [new Array(256), new Array(256)], cacheMiss: 0, ca
 const cache16384 = {cache: new Array(1024), cacheMiss: 0, cacheHit: 0, length: 16384};
 const cache2Way16384 = {cache: [new Array(512), new Array(512)], cacheMiss: 0, cacheHit: 0, length: 16384};
 
+await cache2WayInit([cache2Way1024, cache2Way2048, cache2Way4096, cache2Way8192, cache2Way16384]);
+
 const rd = readline.createInterface({
   input: fs.createReadStream('./trace'),
   console: false
@@ -78,6 +80,24 @@ const cacheCheck = (line, cache) => {
   }
 };
 
+const cache2WayInit = (caches2Way = []) => {
+  return new Promise((resolve, reject) => {
+    caches2Way.map(item => {
+      item.cache[0].map(cacheItem => {
+        cacheItem.count = 0;
+        cacheItem.addr = undefined;
+      })
+  
+      item.cache[1].map(cacheItem => {
+        cacheItem.count = 0;
+        cacheItem.addr = undefined;
+      })
+    })
+
+    resolve(true);
+  });
+};
+
 const cacheSetAssociativeCheckFIFO = (line, cache, numberOfSets) => {
   let start
   
@@ -103,10 +123,36 @@ const cacheSetAssociativeCheckFIFO = (line, cache, numberOfSets) => {
   let cacheIndex = getCacheIndex(binaryAddr, start);
 
   const set = cacheIndex % numberOfSets; 
+  let count = 0;
 
   cache.cache2Way[set].map(values => {
-    
+    if(values.addr === binaryAddr){
+      count ++;
+    }
   });
+
+  if(count === 0){
+    cache.cacheMiss ++;
+
+    const blankIndex = cache.cache2Way[set].findIndex(item => !item.addr);
+
+    if(blankIndex > -1){
+      cache.cache2Way[set][blankIndex].addr = binaryAddr;
+      cache.cache2Way[set][blankIndex].count = 0;
+    }else{
+      let greatCount = -1;
+      let firstInIndex = -1;
+
+      cache.cache2Way[set].map((values, index) => {
+        if(values.count > greatCount){
+          firstInIndex = index;
+        }
+      });
+
+      cache.cache2Way[set][firstInIndex].addr = binaryAddr;
+      cache.cache2Way[set][firstInIndex].count = 0;
+    }
+  }
 };
 
 const getCacheIndex = (binaryAddr, start) => {
