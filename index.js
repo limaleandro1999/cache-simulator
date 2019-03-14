@@ -1,9 +1,9 @@
 const fs = require('fs');
 const readline = require('readline');
 
-const cacheSize = 1; // cache size * 2 ^ cache unit
-const cacheLineSize = 16; // tamanho da linha (bloco) bytes
-const cacheSetLines = 2;
+const cacheSize = 16; // cache size * 2 ^ cache unit
+const cacheLineSize = 16; // tamanho da linha (bloco) em bytes
+const cacheSetLines = 4; // cacheSetLines - way
 const memoryAddressSize = 32;
 const cacheReplacePolicy = 1; // 0 fifo 1 lru
 const cacheSizeUnit = 10; // 10 -> KB 20 -> MB  ...
@@ -13,64 +13,63 @@ console.log(`Cache Size ${cacheSize} KB, Cache Block Size ${cacheLineSize}, ${ca
 const numberCacheLines = (cacheSize * Math.pow(2, cacheSizeUnit)) / cacheLineSize;
 const cacheSetSize = cacheLineSize * cacheSetLines;
 
-const offsetBits = Math.log2(cacheLineSize);
-const indexBits = Math.log2(((cacheSize *  Math.pow(2, cacheSizeUnit)) / cacheSetSize));
-const tagBits = memoryAddressSize - offsetBits - indexBits;
+const offsetBits = Math.log2(cacheLineSize); // quantidade de bits offset
+const indexBits = Math.log2(((cacheSize *  Math.pow(2, cacheSizeUnit)) / cacheSetSize)); // quantidade de bits index
+const tagBits = memoryAddressSize - offsetBits - indexBits; // quantidade de bits tag
 
 console.log(`Cache format, tag bits ${tagBits}, index bits ${indexBits}, offset bits ${offsetBits}`)
 
-let cacheHit = 0;
-let cacheMiss = 0;
-let memReq = 0;
+let cacheHit = 0; // quantidade de cache hit
+let cacheMiss = 0; // quantidade de cache miss
+let memReq = 0; // // quantidade de requisições
 
-const cache = [];
+const cache = []; // vetor cache
 
 for(let i = 0; i < numberCacheLines; i++){
-  cache.push({ valid: 0, tag: 0, timeStamp: 0, numberAccess: 0 });
+  cache.push({ valid: 0, tag: 0, timeStamp: 0, numberAccess: 0 }); // adiciona o json com as informações para cada linha da cache
 }
 
-const rd = readline.createInterface({
-  input: fs.createReadStream('./trace'),
+const rd = readline.createInterface({     //Lê arquivo trace
+  input: fs.createReadStream('./trace'),  
   console: false
 });
-let count = 0;
-rd.on('line', function(line) {
-  //console.log(line + ' ', ++count);
-  let fifo = -1;
-  let lru = -1;
 
-  memReq++;
+rd.on('line', function(line) {  // ouve o evento de cada linha lida, e obtem ela
+  let fifo = -1; // index do candidato a ser substituído na política FIFO
+  let lru = -1; // index do candidato a ser substituído na política LRU
+
+  memReq++; // incrementa o contador de requisições
   
-  cache.map(item => {
-    item.timeStamp++;
+  cache.map(item => { 
+    item.timeStamp++; // incrementa o timestamp de todos os items na cache
   })
 
-  const address = convertNumber(line, 16);
+  const address = convertNumber(line, 16); // converte o endereço de hexadecimal para decimal
 
-  let offset = address & ((Math.pow(2, offsetBits) -1));
-  let index = (address >> offsetBits) & (Math.pow(2, indexBits) -1);
-  let tag = (address >> (offsetBits + indexBits)) & (Math.pow(2, tagBits) -1)
+  let offset = address & ((Math.pow(2, offsetBits) -1)); // obtem os bits de offset
+  let index = (address >> offsetBits) & (Math.pow(2, indexBits) -1); // obtem os bits de index
+  let tag = (address >> (offsetBits + indexBits)) & (Math.pow(2, tagBits) -1); // obtem os bits de tag
 
-  let higherNumber = -1;
-  let lowerNumber = Math.pow(2, 32) - 1;
-  let miss = true;
-  let startIndex = (index * cacheSetLines);
-  let finalIndex = (startIndex + cacheSetLines);
+  let higherNumber = -1; // guarda o maior timestamp para fazer verificações para política FIFO
+  let lowerNumber = Math.pow(2, 32) - 1; // guarda o menor número de acessos para fazer verificações para política LRU
+  let miss = true; // variável para verificar se houve um cache miss
+  let startIndex = (index * cacheSetLines); // guarda o index do começo do conjunto
+  let finalIndex = (startIndex + cacheSetLines); // guarda o index do final do conjunto
 
-  for(let i = startIndex; i < finalIndex; i++){
-    if(cacheReplacePolicy === 0){
+  for(let i = startIndex; i < finalIndex; i++){ // verifica todos os items do conjunto, buscando achar uma tag igual
+    if(cacheReplacePolicy === 0){               // e também busca o candidato a ser substituído
       if(cache[i].timeStamp > higherNumber){
-        higherNumber = cache[i].timeStamp;
+        higherNumber = cache[i].timeStamp; // busca candidato FIFO
         fifo = i;
       }    
     }else{
-      if(cache[i].numberAccess < lowerNumber){
+      if(cache[i].numberAccess < lowerNumber){ // busca candidato LRU
         lowerNumber = cache[i].numberAccess;
         lru = i;
       }
     }
 
-    if(cache[i].tag === tag){
+    if(cache[i].tag === tag){ // verifica se a tag é igual 
       cache[i].numberAccess++;
       cacheHit++;
       miss = false;
