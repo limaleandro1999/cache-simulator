@@ -2,19 +2,19 @@ const fs = require('fs');
 const readline = require('readline');
 
 const cacheSize = 1; // cache size * 2 ^ cache unit
-const cacheLineSize = 16; // tamanho da linha bytes
-const cacheSetLines = 4;
+const cacheLineSize = 16; // tamanho da linha (bloco) bytes
+const cacheSetLines = 2;
 const memoryAddressSize = 32;
-const cacheReplacePolicy = 0; // 0 fifo 1 lru
+const cacheReplacePolicy = 1; // 0 fifo 1 lru
 const cacheSizeUnit = 10; // 10 -> KB 20 -> MB  ...
 
-console.log(`Cache Size ${cacheSize} KB, Cache Block Size ${cacheLineSize}`);
+console.log(`Cache Size ${cacheSize} KB, Cache Block Size ${cacheLineSize}, ${cacheSetLines} - way`);
 
-const numberCacheLines = (Math.pow(2 * cacheSize, cacheSizeUnit)) / cacheLineSize;
+const numberCacheLines = (cacheSize * Math.pow(2, cacheSizeUnit)) / cacheLineSize;
 const cacheSetSize = cacheLineSize * cacheSetLines;
 
 const offsetBits = Math.log2(cacheLineSize);
-const indexBits = Math.log2(((Math.pow(2 * cacheSize, cacheSizeUnit)) / cacheSetSize));
+const indexBits = Math.log2(((cacheSize *  Math.pow(2, cacheSizeUnit)) / cacheSetSize));
 const tagBits = memoryAddressSize - offsetBits - indexBits;
 
 console.log(`Cache format, tag bits ${tagBits}, index bits ${indexBits}, offset bits ${offsetBits}`)
@@ -33,8 +33,9 @@ const rd = readline.createInterface({
   input: fs.createReadStream('./trace'),
   console: false
 });
-
+let count = 0;
 rd.on('line', function(line) {
+  //console.log(line + ' ', ++count);
   let fifo = -1;
   let lru = -1;
 
@@ -55,7 +56,7 @@ rd.on('line', function(line) {
   let miss = true;
   let startIndex = (index * cacheSetLines);
   let finalIndex = (startIndex + cacheSetLines);
-  
+
   for(let i = startIndex; i < finalIndex; i++){
     if(cacheReplacePolicy === 0){
       if(cache[i].timeStamp > higherNumber){
@@ -68,9 +69,7 @@ rd.on('line', function(line) {
         lru = i;
       }
     }
-  }
 
-  for(let i = startIndex; i < finalIndex; i++){
     if(cache[i].tag === tag){
       cache[i].numberAccess++;
       cacheHit++;
@@ -113,9 +112,9 @@ rd.on('line', function(line) {
 rd.on('close', () => {
   console.log(cache);
   console.log(`Cache hit ${cacheHit}`);
-  console.log(`Taxa de acerto ${(cacheHit/memReq) * 100}`);
+  console.log(`hit rate ${(cacheHit/memReq)}`);
   console.log(`Cache miss ${cacheMiss}`);
-  console.log(`Taxa de error ${(cacheMiss/memReq) * 100}`);
+  console.log(`miss rate ${(cacheMiss/memReq)}`);
 });
 
 const convertNumber = (n, fromBase, toBase = 10) => {
